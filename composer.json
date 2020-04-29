@@ -1,37 +1,300 @@
+#import "QTTopLevel.h"
+
+#define λ(decl, expr) (^(decl) { return (expr); })
+#define NSNullify(x) ([x isNotEqualTo:[NSNull null]] ? x : [NSNull null])
+
+NS_ASSUME_NONNULL_BEGIN
+
+@interface QTTopLevel (JSONConversion)
++ (instancetype)fromJSONDictionary:(NSDictionary *)dict;
+- (NSDictionary *)JSONDictionary;
+@end
+
+@interface QTAuthor (JSONConversion)
++ (instancetype)fromJSONDictionary:(NSDictionary *)dict;
+- (NSDictionary *)JSONDictionary;
+@end
+
+@interface QTAutoload (JSONConversion)
++ (instancetype)fromJSONDictionary:(NSDictionary *)dict;
+- (NSDictionary *)JSONDictionary;
+@end
+
+@interface QTRequire (JSONConversion)
++ (instancetype)fromJSONDictionary:(NSDictionary *)dict;
+- (NSDictionary *)JSONDictionary;
+@end
+
+@interface QTSupport (JSONConversion)
++ (instancetype)fromJSONDictionary:(NSDictionary *)dict;
+- (NSDictionary *)JSONDictionary;
+@end
+
+static id map(id collection, id (^f)(id value)) {
+    id result = nil;
+    if ([collection isKindOfClass:[NSArray class]]) {
+        result = [NSMutableArray arrayWithCapacity:[collection count]];
+        for (id x in collection) [result addObject:f(x)];
+    } else if ([collection isKindOfClass:[NSDictionary class]]) {
+        result = [NSMutableDictionary dictionaryWithCapacity:[collection count]];
+        for (id key in collection) [result setObject:f([collection objectForKey:key]) forKey:key];
+    }
+    return result;
+}
+
+#pragma mark - JSON serialization
+
+QTTopLevel *_Nullable QTTopLevelFromData(NSData *data, NSError **error)
 {
-    "name": "whatsapp/chat-api",
-    "description": "The PHP WhatsApp library",
-    "license": "GPL-3.0+",
-    "keywords": [
-        "WhatsApp",
-        "WhatsAPI",
-        "Chat-API"
-    ],
-    "authors": [
-        {
-            "role": "Contributors",
-            "name": "Chat API Contributing Team",
-            "homepage": "https://github.com/mgp25/Chat-API/graphs/contributors"
-        }
-    ],
-    "support": {
-        "issues": "https://github.com/mgp25/Chat-API/issues",
-        "wiki": "https://github.com/mgp25/Chat-API/wiki",
-        "source": "https://github.com/mgp25/Chat-API"
-    },
-    "autoload": {
-        "classmap": [
-            "src/"
-        ]
-    },
-    "require": {
-        "php": ">=5.6",
-        "ext-curl": "*",
-        "ext-gd" : "*",
-        "ext-mcrypt": "*",
-        "ext-openssl" : "*",
-        "ext-pdo" : "*",
-        "ext-sockets" : "*",
-        "ext-sqlite3" : "*"
+    @try {
+        id json = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingAllowFragments error:error];
+        return *error ? nil : [QTTopLevel fromJSONDictionary:json];
+    } @catch (NSException *exception) {
+        *error = [NSError errorWithDomain:@"JSONSerialization" code:-1 userInfo:@{ @"exception": exception }];
+        return nil;
     }
 }
+
+QTTopLevel *_Nullable QTTopLevelFromJSON(NSString *json, NSStringEncoding encoding, NSError **error)
+{
+    return QTTopLevelFromData([json dataUsingEncoding:encoding], error);
+}
+
+NSData *_Nullable QTTopLevelToData(QTTopLevel *topLevel, NSError **error)
+{
+    @try {
+        id json = [topLevel JSONDictionary];
+        NSData *data = [NSJSONSerialization dataWithJSONObject:json options:kNilOptions error:error];
+        return *error ? nil : data;
+    } @catch (NSException *exception) {
+        *error = [NSError errorWithDomain:@"JSONSerialization" code:-1 userInfo:@{ @"exception": exception }];
+        return nil;
+    }
+}
+
+NSString *_Nullable QTTopLevelToJSON(QTTopLevel *topLevel, NSStringEncoding encoding, NSError **error)
+{
+    NSData *data = QTTopLevelToData(topLevel, error);
+    return data ? [[NSString alloc] initWithData:data encoding:encoding] : nil;
+}
+
+@implementation QTTopLevel
++(NSDictionary<NSString *, NSString *> *)properties
+{
+    static NSDictionary<NSString *, NSString *> *properties;
+    return properties = properties ? properties : @{
+        @"autoload": @"autoload",
+        @"authors": @"authors",
+        @"keywords": @"keywords",
+        @"support": @"support",
+        @"description": @"theDescription",
+        @"license": @"license",
+        @"name": @"name",
+        @"require": @"require",
+    };
+}
+
++ (_Nullable instancetype)fromData:(NSData *)data error:(NSError *_Nullable *)error
+{
+    return QTTopLevelFromData(data, error);
+}
+
++ (_Nullable instancetype)fromJSON:(NSString *)json encoding:(NSStringEncoding)encoding error:(NSError *_Nullable *)error
+{
+    return QTTopLevelFromJSON(json, encoding, error);
+}
+
++ (instancetype)fromJSONDictionary:(NSDictionary *)dict
+{
+    return dict ? [[QTTopLevel alloc] initWithJSONDictionary:dict] : nil;
+}
+
+- (instancetype)initWithJSONDictionary:(NSDictionary *)dict
+{
+    if (self = [super init]) {
+        [self setValuesForKeysWithDictionary:dict];
+        _autoload = [QTAutoload fromJSONDictionary:(id)_autoload];
+        _authors = map(_authors, λ(id x, [QTAuthor fromJSONDictionary:x]));
+        _support = [QTSupport fromJSONDictionary:(id)_support];
+        _require = [QTRequire fromJSONDictionary:(id)_require];
+    }
+    return self;
+}
+
+-(void)setValue:(nullable id)value forKey:(NSString *)key
+{
+    [super setValue:value forKey:QTTopLevel.properties[key]];
+}
+
+- (NSDictionary *)JSONDictionary
+{
+    id dict = [[self dictionaryWithValuesForKeys:QTTopLevel.properties.allValues] mutableCopy];
+
+    for (id jsonName in QTTopLevel.properties) {
+        id propertyName = QTTopLevel.properties[jsonName];
+        if (![jsonName isEqualToString:propertyName]) {
+            dict[jsonName] = dict[propertyName];
+            [dict removeObjectForKey:propertyName];
+        }
+    }
+
+    [dict addEntriesFromDictionary:@{
+        @"autoload": [_autoload JSONDictionary],
+        @"authors": map(_authors, λ(id x, [x JSONDictionary])),
+        @"support": [_support JSONDictionary],
+        @"require": [_require JSONDictionary],
+    }];
+
+    return dict;
+}
+
+- (NSData *_Nullable)toData:(NSError *_Nullable *)error
+{
+    return QTTopLevelToData(self, error);
+}
+
+- (NSString *_Nullable)toJSON:(NSStringEncoding)encoding error:(NSError *_Nullable *)error
+{
+    return QTTopLevelToJSON(self, encoding, error);
+}
+@end
+
+@implementation QTAuthor
++(NSDictionary<NSString *, NSString *> *)properties
+{
+    static NSDictionary<NSString *, NSString *> *properties;
+    return properties = properties ? properties : @{
+        @"name": @"name",
+        @"role": @"role",
+        @"homepage": @"homepage",
+    };
+}
+
++ (instancetype)fromJSONDictionary:(NSDictionary *)dict
+{
+    return dict ? [[QTAuthor alloc] initWithJSONDictionary:dict] : nil;
+}
+
+- (instancetype)initWithJSONDictionary:(NSDictionary *)dict
+{
+    if (self = [super init]) {
+        [self setValuesForKeysWithDictionary:dict];
+    }
+    return self;
+}
+
+- (NSDictionary *)JSONDictionary
+{
+    return [self dictionaryWithValuesForKeys:QTAuthor.properties.allValues];
+}
+@end
+
+@implementation QTAutoload
++(NSDictionary<NSString *, NSString *> *)properties
+{
+    static NSDictionary<NSString *, NSString *> *properties;
+    return properties = properties ? properties : @{
+        @"classmap": @"classmap",
+    };
+}
+
++ (instancetype)fromJSONDictionary:(NSDictionary *)dict
+{
+    return dict ? [[QTAutoload alloc] initWithJSONDictionary:dict] : nil;
+}
+
+- (instancetype)initWithJSONDictionary:(NSDictionary *)dict
+{
+    if (self = [super init]) {
+        [self setValuesForKeysWithDictionary:dict];
+    }
+    return self;
+}
+
+- (NSDictionary *)JSONDictionary
+{
+    return [self dictionaryWithValuesForKeys:QTAutoload.properties.allValues];
+}
+@end
+
+@implementation QTRequire
++(NSDictionary<NSString *, NSString *> *)properties
+{
+    static NSDictionary<NSString *, NSString *> *properties;
+    return properties = properties ? properties : @{
+        @"ext-gd": @"extGd",
+        @"ext-mcrypt": @"extMcrypt",
+        @"ext-sqlite3": @"extSqlite3",
+        @"php": @"php",
+        @"ext-openssl": @"extOpenssl",
+        @"ext-pdo": @"extPdo",
+        @"ext-sockets": @"extSockets",
+        @"ext-curl": @"extCurl",
+    };
+}
+
++ (instancetype)fromJSONDictionary:(NSDictionary *)dict
+{
+    return dict ? [[QTRequire alloc] initWithJSONDictionary:dict] : nil;
+}
+
+- (instancetype)initWithJSONDictionary:(NSDictionary *)dict
+{
+    if (self = [super init]) {
+        [self setValuesForKeysWithDictionary:dict];
+    }
+    return self;
+}
+
+-(void)setValue:(nullable id)value forKey:(NSString *)key
+{
+    [super setValue:value forKey:QTRequire.properties[key]];
+}
+
+- (NSDictionary *)JSONDictionary
+{
+    id dict = [[self dictionaryWithValuesForKeys:QTRequire.properties.allValues] mutableCopy];
+
+    for (id jsonName in QTRequire.properties) {
+        id propertyName = QTRequire.properties[jsonName];
+        if (![jsonName isEqualToString:propertyName]) {
+            dict[jsonName] = dict[propertyName];
+            [dict removeObjectForKey:propertyName];
+        }
+    }
+
+    return dict;
+}
+@end
+
+@implementation QTSupport
++(NSDictionary<NSString *, NSString *> *)properties
+{
+    static NSDictionary<NSString *, NSString *> *properties;
+    return properties = properties ? properties : @{
+        @"source": @"source",
+        @"issues": @"issues",
+        @"wiki": @"wiki",
+    };
+}
+
++ (instancetype)fromJSONDictionary:(NSDictionary *)dict
+{
+    return dict ? [[QTSupport alloc] initWithJSONDictionary:dict] : nil;
+}
+
+- (instancetype)initWithJSONDictionary:(NSDictionary *)dict
+{
+    if (self = [super init]) {
+        [self setValuesForKeysWithDictionary:dict];
+    }
+    return self;
+}
+
+- (NSDictionary *)JSONDictionary
+{
+    return [self dictionaryWithValuesForKeys:QTSupport.properties.allValues];
+}
+@end
+
+NS_ASSUME_NONNULL_END
